@@ -32,6 +32,7 @@
     <EmbeddedResource Include="Resources\inpoutx64.gz" />
     <EmbeddedResource Include="Resources\WinRing0.gz" />
     <EmbeddedResource Include="Resources\WinRing0x64.gz" />
+    <EmbeddedResource Include="Resources\PawnIO\LpcIO.bin" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' != 'net472'">
     <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />

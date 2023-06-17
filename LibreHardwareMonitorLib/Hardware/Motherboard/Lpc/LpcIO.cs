@@ -48,16 +48,7 @@ internal class LpcIO
 
     private bool DetectSmsc(LpcPort port)
     {
-        port.SmscEnter();
-
-        ushort chipId = port.ReadWord(CHIP_ID_REGISTER);
-
-        if (chipId is not 0 and not 0xffff)
-        {
-            port.SmscExit();
-            ReportUnknownChip(port, "SMSC", chipId);
-        }
-
+        ReportUnknownChip(port, "SMSC", port.ChipIdRevision);
         return false;
     }
 
@@ -67,11 +58,20 @@ internal class LpcIO
         {
             var port = new LpcPort(REGISTER_PORTS[i], VALUE_PORTS[i]);
 
-            if (DetectWinbondFintek(port)) continue;
-
-            if (DetectIT87(port, motherboard)) continue;
-
-            if (DetectSmsc(port)) continue;
+            switch (port.Vendor)
+            {
+                case LpcPort.ChipVendor.Winbond:
+                    DetectWinbondFintek(port);
+                    break;
+                case LpcPort.ChipVendor.IT87:
+                    DetectIT87(port, motherboard);
+                    break;
+                case LpcPort.ChipVendor.Smsc:
+                    DetectSmsc(port);
+                    break;
+                default:
+                    break;
+            }
         }
     }
 
@@ -87,11 +87,9 @@ internal class LpcIO
 
     private bool DetectWinbondFintek(LpcPort port)
     {
-        port.WinbondNuvotonFintekEnter();
-
         byte logicalDeviceNumber = 0;
-        byte id = port.ReadByte(CHIP_ID_REGISTER);
-        byte revision = port.ReadByte(CHIP_REVISION_REGISTER);
+        byte id = (byte)(port.ChipIdRevision >> 8);
+        byte revision = (byte)port.ChipIdRevision;
         Chip chip = Chip.Unknown;
 
         switch (id)
@@ -410,14 +408,11 @@ internal class LpcIO
 
         if (chip == Chip.Unknown)
         {
-            if (id is not 0 and not 0xff)
-            {
-                port.WinbondNuvotonFintekExit();
-                ReportUnknownChip(port, "Winbond / Nuvoton / Fintek", (id << 8) | revision);
-            }
+            ReportUnknownChip(port, "Winbond / Nuvoton / Fintek", (id << 8) | revision);
         }
         else
         {
+            port.Enter();
             port.Select(logicalDeviceNumber);
             ushort address = port.ReadWord(BASE_ADDRESS_REGISTER);
             Thread.Sleep(1);
@@ -432,7 +427,7 @@ internal class LpcIO
                 port.NuvotonDisableIOSpaceLock();
             }
 
-            port.WinbondNuvotonFintekExit();
+            port.Exit();
 
             if (address != verify)
             {
@@ -473,7 +468,7 @@ internal class LpcIO
                 case Chip.W83667HG:
                 case Chip.W83667HGB:
                 case Chip.W83687THF:
-                    _superIOs.Add(new W836XX(chip, revision, address));
+                    _superIOs.Add(new W836XX(port, chip, revision, address));
                     break;
 
                 case Chip.NCT610XD:
@@ -493,7 +488,7 @@ internal class LpcIO
                 case Chip.NCT6686D:
                 case Chip.NCT6687D:
                 case Chip.NCT6683D:
-                    _superIOs.Add(new Nct677X(chip, revision, address, port));
+                    _superIOs.Add(new Nct677X(port, chip, revision, address));
                     break;
 
                 case Chip.F71858:
@@ -519,7 +514,7 @@ internal class LpcIO
                         return false;
                     }
 
-                    _superIOs.Add(new F718XX(chip, address));
+                    _superIOs.Add(new F718XX(port, chip, address));
                     break;
             }
 
@@ -536,9 +531,7 @@ internal class LpcIO
         if (port.RegisterPort is not 0x2E and not 0x4E)
             return false;
 
-        port.IT87Enter();
-
-        ushort chipId = port.ReadWord(CHIP_ID_REGISTER);
+        ushort chipId = port.ChipIdRevision;
         Chip chip = chipId switch
         {
             0x8613 => Chip.IT8613E,
@@ -569,15 +562,11 @@ internal class LpcIO
 
         if (chip == Chip.Unknown)
         {
-            if (chipId is not 0 and not 0xffff)
-            {
-                port.IT87Exit();
-
-                ReportUnknownChip(port, "ITE", chipId);
-            }
+            ReportUnknownChip(port, "ITE", chipId);
         }
         else
         {
+            port.Enter();
             port.Select(IT87_ENVIRONMENT_CONTROLLER_LDN);
 
             ushort address = port.ReadWord(BASE_ADDRESS_REGISTER);
@@ -606,7 +595,7 @@ internal class LpcIO
 
             GigabyteController gigabyteController = FindGigabyteEC(port, chip, motherboard);
 
-            port.IT87Exit();
+            port.Exit();
 
             if (address != verify || address < 0x100 || (address & 0xF007) != 0)
             {
@@ -630,7 +619,7 @@ internal class LpcIO
                 return false;
             }
 
-            _superIOs.Add(new IT87XX(chip, address, gpioAddress, version, motherboard, gigabyteController));
+            _superIOs.Add(new IT87XX(port, chip, address, gpioAddress, version, motherboard, gigabyteController));
             return true;
         }
 
@@ -645,55 +634,17 @@ internal class LpcIO
         if (motherboard.Manufacturer != Manufacturer.Gigabyte || port.RegisterPort != 0x4E || chip is not (Chip.IT8790E or Chip.IT8792E or Chip.IT87952E))
             return null;
 
-        port.Select(IT87XX_SMFI_LDN);
-
-        // Check if the SMFI logical device is enabled
-        byte enabled = port.ReadByte(IT87_LD_ACTIVE_REGISTER);
-        Thread.Sleep(1);
-        byte enabledVerify = port.ReadByte(IT87_LD_ACTIVE_REGISTER);
-
-        // The EC has no SMFI or it's RAM access is not enabled, assume the controller is not present
-        if (enabled != enabledVerify || enabled == 0)
-            return null;
-
-        // Read the host RAM address that maps to the Embedded Controller's RAM (two registers).
-        uint addressHi = 0;
-        uint addressHiVerify = 0;
-        uint address = port.ReadWord(IT87_SMFI_HLPC_RAM_BASE_ADDRESS_REGISTER);
-        if (chip == Chip.IT87952E)
-            addressHi = port.ReadByte(IT87_SMFI_HLPC_RAM_BASE_ADDRESS_REGISTER_HIGH);
-        
-        Thread.Sleep(1);
-        uint addressVerify = port.ReadWord(IT87_SMFI_HLPC_RAM_BASE_ADDRESS_REGISTER);
-        if (chip == Chip.IT87952E)
-            addressHiVerify = port.ReadByte(IT87_SMFI_HLPC_RAM_BASE_ADDRESS_REGISTER_HIGH);
-
-        if ((address != addressVerify) || (addressHi != addressHiVerify))
-            return null;
-
-        // Address is xryy, Host Address is FFyyx000
-        // For IT87952E, Address is rzxryy, Host Address is (0xFC000000 | 0x0zyyx000)
-        uint hostAddress;
-        if (chip == Chip.IT87952E)
-            hostAddress = 0xFC000000;
-        else
-            hostAddress = 0xFF000000;
-
-        hostAddress |= (address & 0xF000) | ((address & 0xFF) << 16) | ((addressHi & 0xF) << 24);
-
-        return new GigabyteController(hostAddress, DetectVendor());
-
-        Vendor DetectVendor()
+        bool valid = true;
+        try
         {
-            string manufacturer = motherboard.SMBios.Processors[0].ManufacturerName;
-            if (manufacturer.IndexOf("Intel", StringComparison.OrdinalIgnoreCase) != -1)
-                return Vendor.Intel;
-
-            if (manufacturer.IndexOf("Advanced Micro Devices", StringComparison.OrdinalIgnoreCase) != -1 || manufacturer.StartsWith("AMD", StringComparison.OrdinalIgnoreCase))
-                return Vendor.AMD;
-
-            return Vendor.Unknown;
+            port.IsGigabyteControllerEnabled();
         }
+        catch (Exception)
+        {
+            valid = false;
+        }
+
+        return valid ? new GigabyteController(port) : null;
     }
 
     // ReSharper disable InconsistentNaming
