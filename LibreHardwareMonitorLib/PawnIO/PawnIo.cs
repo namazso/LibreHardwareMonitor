@@ -84,25 +84,11 @@ internal class PawnIO
 
     public static void Close()
     {
-        foreach (PawnIO module in _loadedModules.Values)
-        {
-            nint handle = Interlocked.Exchange(ref module._handle, IntPtr.Zero);
-            if (handle != IntPtr.Zero)
-                pawnio_close(handle);
-        }
-
-        _loadedModules.Clear();
     }
-
 
     public static PawnIO LoadModule(string name, byte[] bytes)
     {
-        if (_loadedModules.TryGetValue(name, out PawnIO pawnIO))
-        {
-            return pawnIO;
-        }
-
-        pawnIO = new PawnIO();
+        var pawnIO = new PawnIO();
         unsafe
         {
             fixed (byte* bytesPtr = bytes)
@@ -111,28 +97,19 @@ internal class PawnIO
             }
         }
 
-        _loadedModules.Add(name, pawnIO);
-
         return pawnIO;
     }
 
     public static PawnIO LoadModuleFromResource(Assembly assembly, string resourceName)
     {
-        if (_loadedModules.TryGetValue(resourceName, out PawnIO pawnIO))
-        {
-            return pawnIO;
-        }
-
         using Stream s = assembly.GetManifestResourceStream(resourceName);
         if (s is not UnmanagedMemoryStream ums) throw new InvalidOperationException();
 
-        pawnIO = new PawnIO();
+        var pawnIO = new PawnIO();
         unsafe
         {
             pawnio_load(pawnIO._handle, ums.PositionPointer, (IntPtr)ums.Length);
         }
-
-        _loadedModules.Add(resourceName, pawnIO);
 
         return pawnIO;
     }
@@ -147,5 +124,4 @@ internal class PawnIO
     }
 
     private IntPtr _handle;
-    private static readonly Dictionary<string, PawnIO> _loadedModules = [];
 }
