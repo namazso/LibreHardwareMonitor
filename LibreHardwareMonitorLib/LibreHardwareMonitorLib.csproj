@@ -32,6 +32,9 @@
     <EmbeddedResource Include="Resources\PawnIo\LpcACPIEC.bin" />
     <EmbeddedResource Include="Resources\PawnIo\IntelMSR.bin" />
     <EmbeddedResource Include="Resources\PawnIo\RyzenSMU.bin" />
+    <EmbeddedResource Include="Resources\PawnIo\AMDFamily0F.bin" />
+    <EmbeddedResource Include="Resources\PawnIo\AMDFamily10.bin" />
+    <EmbeddedResource Include="Resources\PawnIo\AMDFamily17.bin" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' != 'net472'">
     <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
