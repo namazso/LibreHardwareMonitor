@@ -27,10 +27,6 @@
   <PropertyGroup>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="Resources\WinRing0.gz" />
-    <EmbeddedResource Include="Resources\WinRing0x64.gz" />
-  </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' != 'net472'">
     <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
     <PackageReference Include="System.IO.Ports" Version="9.0.6" />
