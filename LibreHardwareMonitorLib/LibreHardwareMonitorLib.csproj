@@ -28,8 +28,6 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Resources\inpout32.gz" />
-    <EmbeddedResource Include="Resources\inpoutx64.gz" />
     <EmbeddedResource Include="Resources\WinRing0.gz" />
     <EmbeddedResource Include="Resources\WinRing0x64.gz" />
   </ItemGroup>

@@ -34,7 +34,7 @@ public class Computer : IComputer
     private readonly List<IGroup> _groups = new();
     private readonly object _lock = new();
     private readonly ISettings _settings;
-        
+
     private bool _batteryEnabled;
     private bool _controllerEnabled;
     private bool _cpuEnabled;
@@ -627,7 +627,7 @@ public class Computer : IComputer
     }
 
     /// <summary>
-    /// If opened before, removes all <see cref="IGroup" /> and triggers <see cref="OpCode.Close" />, <see cref="InpOut.Close" /> and <see cref="Ring0.Close" />.
+    /// If opened before, removes all <see cref="IGroup" /> and triggers <see cref="OpCode.Close" /> and <see cref="Ring0.Close" />.
     /// </summary>
     public void Close()
     {
@@ -644,7 +644,6 @@ public class Computer : IComputer
         }
 
         OpCode.Close();
-        InpOut.Close();
         Ring0.Close();
         Mutexes.Close();
 
