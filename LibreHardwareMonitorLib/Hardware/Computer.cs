@@ -481,6 +481,7 @@ public class Computer : IComputer
 
         _smbios = new SMBios();
 
+        PawnIo.PawnIO.Open();
         Mutexes.Open();
         OpCode.Open();
 
@@ -622,6 +623,7 @@ public class Computer : IComputer
         }
 
         OpCode.Close();
+        PawnIo.PawnIO.Close();
         Mutexes.Close();
 
         _smbios = null;
