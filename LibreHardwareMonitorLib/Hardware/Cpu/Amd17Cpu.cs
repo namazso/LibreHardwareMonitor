@@ -26,7 +26,7 @@ internal sealed class Amd17Cpu : AmdCpu
 
         _sensorTypeIndex[SensorType.Load] = _active.Count(x => x.SensorType == SensorType.Load);
 
-        _smu = new RyzenSMU(_family, _model, _packageType);
+        _smu = new RyzenSMU();
 
         // Add all numa nodes.
         // Register ..1E_2, [10:8] + 1
