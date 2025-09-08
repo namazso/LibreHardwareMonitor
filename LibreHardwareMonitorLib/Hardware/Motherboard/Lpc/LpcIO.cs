@@ -429,6 +429,10 @@ internal class LpcIO
                         chip = Chip.NCT6799D;
                         logicalDeviceNumber = WINBOND_NUVOTON_HARDWARE_MONITOR_LDN;
                         break;
+                    case 0x06:
+                        chip = Chip.NCT6701D; // NCT6701D Compatibility
+                        logicalDeviceNumber = WINBOND_NUVOTON_HARDWARE_MONITOR_LDN;
+                        break;
                 }
 
                 break;
