@@ -48,7 +48,17 @@ internal class LpcIO
 
     private bool DetectSmsc(LpcPort port)
     {
-        ReportUnknownChip(port, "SMSC", port.ChipIdRevision);
+        port.SmscEnter();
+
+        ushort chipId = port.ReadWord(CHIP_ID_REGISTER);
+
+        if (chipId is not 0 and not 0xffff)
+        {
+            port.FindBars();
+            port.SmscExit();
+            ReportUnknownChip(port, "SMSC", chipId);
+        }
+
         return false;
     }
 
@@ -58,20 +68,11 @@ internal class LpcIO
         {
             var port = new LpcPort(REGISTER_PORTS[i], VALUE_PORTS[i]);
 
-            switch (port.Vendor)
-            {
-                case LpcPort.ChipVendor.Winbond:
-                    DetectWinbondFintek(port, motherboard);
-                    break;
-                case LpcPort.ChipVendor.IT87:
-                    DetectIT87(port, motherboard);
-                    break;
-                case LpcPort.ChipVendor.Smsc:
-                    DetectSmsc(port);
-                    break;
-                default:
-                    break;
-            }
+            if (DetectWinbondFintek(port, motherboard)) continue;
+
+            if (DetectIT87(port, motherboard)) continue;
+
+            if (DetectSmsc(port)) continue;
         }
     }
 
@@ -87,9 +88,11 @@ internal class LpcIO
 
     private bool DetectWinbondFintek(LpcPort port, Motherboard motherboard)
     {
+        port.WinbondNuvotonFintekEnter();
+
         byte logicalDeviceNumber = 0;
-        byte id = (byte)(port.ChipIdRevision >> 8);
-        byte revision = (byte)port.ChipIdRevision;
+        byte id = port.ReadByte(CHIP_ID_REGISTER);
+        byte revision = port.ReadByte(CHIP_REVISION_REGISTER);
         Chip chip = Chip.Unknown;
 
         switch (id)
@@ -429,6 +432,10 @@ internal class LpcIO
                         chip = Chip.NCT6799D;
                         logicalDeviceNumber = WINBOND_NUVOTON_HARDWARE_MONITOR_LDN;
                         break;
+                    case 0x06:
+                        chip = Chip.NCT6701D;
+                        logicalDeviceNumber = WINBOND_NUVOTON_HARDWARE_MONITOR_LDN;
+                        break;
                 }
 
                 break;
@@ -436,11 +443,15 @@ internal class LpcIO
 
         if (chip == Chip.Unknown)
         {
-            ReportUnknownChip(port, "Winbond / Nuvoton / Fintek", (id << 8) | revision);
+            if (id is not 0 and not 0xff)
+            {
+                port.WinbondNuvotonFintekExit();
+                ReportUnknownChip(port, "Winbond / Nuvoton / Fintek", (id << 8) | revision);
+            }
         }
         else
         {
-            port.Enter();
+            port.FindBars();
             port.Select(logicalDeviceNumber);
             ushort address = port.ReadWord(BASE_ADDRESS_REGISTER);
             Thread.Sleep(1);
@@ -455,7 +466,7 @@ internal class LpcIO
                 port.NuvotonDisableIOSpaceLock();
             }
 
-            port.Exit();
+            port.WinbondNuvotonFintekExit();
 
             if (address != verify)
             {
@@ -561,7 +572,15 @@ internal class LpcIO
         if (port.RegisterPort is not 0x2E and not 0x4E)
             return false;
 
-        ushort chipId = port.ChipIdRevision;
+        // Read the chip ID before entering.
+        // If already entered (not 0xFFFF) and the register port is 0x4E, it is most likely bugged and should be left alone.
+        // Entering IT8792 in this state will result in IT8792 reporting with chip ID of 0x8883.
+        if (port.RegisterPort != 0x4E || !port.TryReadWord(CHIP_ID_REGISTER, out ushort chipId))
+        {
+            port.IT87Enter();
+            chipId = port.ReadWord(CHIP_ID_REGISTER);
+        }
+
         Chip chip = chipId switch
         {
             0x8613 => Chip.IT8613E,
@@ -593,11 +612,16 @@ internal class LpcIO
 
         if (chip == Chip.Unknown)
         {
-            ReportUnknownChip(port, "ITE", chipId);
+            if (chipId is not 0 and not 0xffff)
+            {
+                port.IT87Exit();
+
+                ReportUnknownChip(port, "ITE", chipId);
+            }
         }
         else
         {
-            port.Enter();
+            port.FindBars();
             port.Select(IT87_ENVIRONMENT_CONTROLLER_LDN);
 
             ushort address = port.ReadWord(BASE_ADDRESS_REGISTER);
@@ -624,9 +648,7 @@ internal class LpcIO
                 gpioVerify = port.ReadWord(BASE_ADDRESS_REGISTER + 2);
             }
 
-            IGigabyteController gigabyteController = FindGigabyteEC(port, chip, motherboard);
-
-            port.Exit();
+            port.IT87Exit();
 
             if (address != verify || address < 0x100 || (address & 0xF007) != 0)
             {
@@ -650,32 +672,11 @@ internal class LpcIO
                 return false;
             }
 
-            _superIOs.Add(new IT87XX(port, chip, address, gpioAddress, version, motherboard, gigabyteController));
+            _superIOs.Add(new IT87XX(port, chip, address, gpioAddress, version, motherboard, null));
             return true;
         }
 
         return false;
-    }
-
-    private IGigabyteController FindGigabyteEC(LpcPort port, Chip chip, Motherboard motherboard)
-    {
-        // The controller only affects the 2nd ITE chip if present, and only a few
-        // models are known to use this controller.
-        // IT8795E likely to need this too, but may use different registers.
-        if (motherboard.Manufacturer != Manufacturer.Gigabyte || port.RegisterPort != 0x4E || chip is not (Chip.IT8790E or Chip.IT8792E or Chip.IT87952E))
-            return null;
-
-        bool valid = true;
-        try
-        {
-            port.IsGigabyteControllerEnabled();
-        }
-        catch (Exception)
-        {
-            valid = false;
-        }
-
-        return valid ? new IsaBridgeGigabyteController(port) : null;
     }
 
     // ReSharper disable InconsistentNaming
@@ -690,16 +691,12 @@ internal class LpcIO
     private const byte IT87XX_GPIO_LDN = 0x07;
 
     // Shared Memory/Flash Interface
-    private const byte IT87XX_SMFI_LDN = 0x0F;
     private const byte WINBOND_NUVOTON_HARDWARE_MONITOR_LDN = 0x0B;
 
     private const ushort FINTEK_VENDOR_ID = 0x1934;
 
     private const byte FINTEK_VENDOR_ID_REGISTER = 0x23;
     private const byte IT87_CHIP_VERSION_REGISTER = 0x22;
-    private const byte IT87_SMFI_HLPC_RAM_BASE_ADDRESS_REGISTER = 0xF5;
-    private const byte IT87_SMFI_HLPC_RAM_BASE_ADDRESS_REGISTER_HIGH = 0xFC;
-    private const byte IT87_LD_ACTIVE_REGISTER = 0x30;
 
     private readonly ushort[] REGISTER_PORTS = { 0x2E, 0x4E };
 

@@ -1100,9 +1100,9 @@ internal class Nct677X : ISuperIO
         if (IsNuvotonVendor())
             return;
 
-        _lpcPort.Enter();
+        _lpcPort.WinbondNuvotonFintekEnter();
         _lpcPort.NuvotonDisableIOSpaceLock();
-        _lpcPort.Exit();
+        _lpcPort.WinbondNuvotonFintekExit();
     }
 
     [SuppressMessage("ReSharper", "InconsistentNaming")]

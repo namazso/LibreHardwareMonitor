@@ -13,56 +13,47 @@ namespace LibreHardwareMonitor.PawnIo
             _pawnIO = PawnIo.PawnIO.LoadModuleFromResource(typeof(LpcIO).Assembly, $"{nameof(LibreHardwareMonitor)}.Resources.PawnIO.LpcIO.bin");
         }
 
-        public long Detect(int slot)
+        public void SelectSlot(int slot)
         {
             _singleArgArray[0] = slot;
-            return _pawnIO.Execute("ioctl_detect", _singleArgArray, 1)[0];
+            _pawnIO.Execute("ioctl_select_slot", _singleArgArray, 0);
         }
 
-        public byte ReadByte(byte register)
+        public void FindBars()
         {
-            _singleArgArray[0] = register;
-            return (byte)_pawnIO.Execute("ioctl_read", _singleArgArray, 1)[0];
-        }
-
-        public void WriteByte(byte register, byte value)
-        {
-            _doubleArgArray[0] = register;
-            _doubleArgArray[1] = value;
-            _pawnIO.Execute("ioctl_write", _doubleArgArray, 0);
-        }
-
-        public void Enter()
-        {
-            _pawnIO.Execute("ioctl_enter", [], 0);
-        }
-
-        public void Exit()
-        {
-            _pawnIO.Execute("ioctl_exit", [], 0);
+            _pawnIO.Execute("ioctl_find_bars", [], 0);
         }
 
         public byte ReadPort(ushort port)
         {
             _singleArgArray[0] = port;
-            return (byte)_pawnIO.Execute("ioctl_pio_read", _singleArgArray, 1)[0];
+            return (byte)_pawnIO.Execute("ioctl_pio_inb", _singleArgArray, 1)[0];
         }
 
         public void WritePort(ushort port, byte value)
         {
             _doubleArgArray[0] = port;
             _doubleArgArray[1] = value;
-            _pawnIO.Execute("ioctl_pio_write", _doubleArgArray, 0);
+            _pawnIO.Execute("ioctl_pio_outb", _doubleArgArray, 0);
         }
 
-        public bool IsGigabyteControllerEnabled()
+        public byte ReadByte(byte register)
         {
-            return _pawnIO.Execute("ioctl_set_gigabyte_controller", [-1], 1)[0] != 0;
+            _singleArgArray[0] = register;
+            return (byte)_pawnIO.Execute("ioctl_superio_inb", _singleArgArray, 1)[0];
         }
 
-        public bool SetGigabyteControllerEnabled(bool enable)
+        public ushort ReadWord(byte register)
         {
-            return _pawnIO.Execute("ioctl_set_gigabyte_controller", [enable ? 1 : 0], 1)[0] != 0;
+            _singleArgArray[0] = register;
+            return (ushort)_pawnIO.Execute("ioctl_superio_inw", _singleArgArray, 1)[0];
+        }
+
+        public void WriteByte(byte register, byte value)
+        {
+            _doubleArgArray[0] = register;
+            _doubleArgArray[1] = value;
+            _pawnIO.Execute("ioctl_superio_outb", _doubleArgArray, 0);
         }
     }
 }
