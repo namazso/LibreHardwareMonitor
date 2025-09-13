@@ -13,7 +13,6 @@ using System.Threading.Tasks;
 using RAMSPDToolkit.I2CSMBus;
 using RAMSPDToolkit.SPD;
 using RAMSPDToolkit.SPD.Enums;
-using RAMSPDToolkit.SPD.Interfaces;
 using RAMSPDToolkit.SPD.Interop.Shared;
 using RAMSPDToolkit.Windows.Driver;
 
@@ -161,9 +160,8 @@ internal class MemoryGroup : IGroup, IHardwareChanged
                 //RAM available and detected
                 if (detector.Accessor != null)
                 {
-                    //We are only interested in modules with thermal sensor
-                    if (detector.Accessor is IThermalSensor { HasThermalSensor: true })
-                        accessors.Add(detector.Accessor);
+                    //Add all detected modules
+                    accessors.Add(detector.Accessor);
 
                     ramDetected = true;
                 }
@@ -175,6 +173,8 @@ internal class MemoryGroup : IGroup, IHardwareChanged
 
     private void AddDimms(List<SPDAccessor> accessors, ISettings settings)
     {
+        List<Hardware> additions = [];
+
         foreach (SPDAccessor ram in accessors)
         {
             //Default value
@@ -185,9 +185,11 @@ internal class MemoryGroup : IGroup, IHardwareChanged
                 name = $"{ram.GetModuleManufacturerString()} - {ram.ModulePartNumber()} (#{ram.Index})";
 
             DimmMemory memory = new(ram, name, new Identifier($"memory/dimm/{ram.Index}"), settings);
-
-            _hardware.Add(memory);
-            HardwareAdded?.Invoke(memory);
+            additions.Add(memory);
         }
+
+        _hardware = [.. _hardware, .. additions];
+        foreach (Hardware hardware in additions)
+            HardwareAdded?.Invoke(hardware);
     }
 }
