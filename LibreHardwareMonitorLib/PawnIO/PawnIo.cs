@@ -26,6 +26,10 @@ internal class PawnIO
     private static extern void pawnio_execute(IntPtr handle, [MarshalAs(UnmanagedType.LPStr)] string name,
         long[] inArray, IntPtr inSize, long[] outArray, IntPtr outSize, out IntPtr returnSize);
 
+    [DllImport("PawnIOLib", ExactSpelling = true, EntryPoint = "pawnio_execute")]
+    private static extern int pawnio_execute_hr(IntPtr handle, [MarshalAs(UnmanagedType.LPStr)] string name,
+        long[] inArray, IntPtr inSize, long[] outArray, IntPtr outSize, out IntPtr returnSize);
+
     [DllImport("PawnIOLib", ExactSpelling = true, PreserveSig = false)]
     private static extern void pawnio_close(IntPtr handle);
 
@@ -121,6 +125,19 @@ internal class PawnIO
             out nint returnLength);
         Array.Resize(ref outArray, (int)returnLength);
         return outArray;
+    }
+
+    public int ExecuteHr(string name, long[] inBuffer, uint inSize, long[] outBuffer, uint outSize, out uint returnSize)
+    {
+        if (inBuffer.Length < inSize)
+            throw new ArgumentOutOfRangeException(nameof(inSize));
+        if (outBuffer.Length < outSize)
+            throw new ArgumentOutOfRangeException(nameof(outSize));
+        int ret = pawnio_execute_hr(_handle, name, inBuffer, (IntPtr)inSize, outBuffer, (IntPtr)outSize, out var retSize);
+
+        returnSize = (uint)retSize;
+
+        return ret;
     }
 
     private IntPtr _handle;
